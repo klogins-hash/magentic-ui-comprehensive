@@ -1,0 +1,20 @@
+{
+  "name": "@magentic-ui/core",
+  "version": "1.0.0",
+  "description": "Core Magentic-UI Python package",
+  "main": "src/magentic_ui/__init__.py",
+  "scripts": {
+    "build": "uv build",
+    "test": "pytest tests/ -v",
+    "lint": "ruff check src/ && ruff format --check src/",
+    "dev": "magentic-ui --port 8081",
+    "clean": "rm -rf dist/ build/ __pycache__/ .pytest_cache/"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/magentic-ui.git",
+    "directory": "packages/core"
+  }
+}

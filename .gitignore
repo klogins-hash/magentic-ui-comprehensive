@@ -211,3 +211,41 @@ venv.bak/
 # Task centric memory related db and logs
 **/memory_bank/
 **/pagelogs/
+
+# Voice system
+voice-backend/.env
+voice-backend/logs/
+ios-app/DerivedData/
+ios-app/*.xcuserstate
+ios-app/*.xcworkspace/xcuserdata/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+database.sqlite
+
+# Development and testing
+*_test_report.md
+*_benchmark_report.md
+test_results/
+logs/
+debug/
+
+# Temporary files
+scratch/
+temp/
+tmp/
+
+# Model files and caches
+models/
+.cache/
+*.pkl
+*.joblib
+
+# Pipecat examples (large external repo)
+pipecat-examples/
+
+# Development artifacts
+optimization_results.md
+model_similarity_matrix.csv

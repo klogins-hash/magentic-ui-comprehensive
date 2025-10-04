@@ -1,0 +1,21 @@
+{
+  "name": "@magentic-ui/voice-backend",
+  "version": "1.0.0",
+  "description": "Pipecat-powered voice processing backend",
+  "main": "main.py",
+  "scripts": {
+    "build": "echo 'Python package - no build step'",
+    "test": "pytest tests/ -v",
+    "lint": "ruff check . && ruff format --check .",
+    "dev": "python main.py --debug",
+    "start": "python main.py",
+    "clean": "rm -rf __pycache__/ .pytest_cache/ logs/"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/magentic-ui.git",
+    "directory": "voice-backend"
+  }
+}

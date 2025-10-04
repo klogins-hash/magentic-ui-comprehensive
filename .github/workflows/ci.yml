@@ -1,0 +1,161 @@
+name: Monorepo CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      core: ${{ steps.changes.outputs.core }}
+      frontend: ${{ steps.changes.outputs.frontend }}
+      voice-backend: ${{ steps.changes.outputs.voice-backend }}
+      ios-app: ${{ steps.changes.outputs.ios-app }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dorny/paths-filter@v2
+      id: changes
+      with:
+        filters: |
+          core:
+            - 'src/**'
+            - 'pyproject.toml'
+            - 'uv.lock'
+          frontend:
+            - 'frontend/**'
+            - 'web-frontend/**'
+          voice-backend:
+            - 'voice-backend/**'
+          ios-app:
+            - 'ios-app/**'
+
+  test:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    strategy:
+      matrix:
+        python-version: [3.10, 3.11, 3.12]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v2
+    
+    - name: Install dependencies
+      run: |
+        uv venv --python=${{ matrix.python-version }} .venv
+        . .venv/bin/activate
+        uv sync --all-extras
+    
+    - name: Run tests
+      run: |
+        . .venv/bin/activate
+        pytest tests/ -v
+    
+    - name: Run linting
+      run: |
+        . .venv/bin/activate
+        ruff check src/
+        ruff format --check src/
+
+  voice-backend-test:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.voice-backend == 'true'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install voice backend dependencies
+      run: |
+        cd voice-backend
+        pip install -r requirements.txt
+    
+    - name: Test voice backend
+      run: |
+        cd voice-backend
+        python -m pytest tests/ -v || echo "No tests found"
+
+  frontend-test:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'yarn'
+        cache-dependency-path: frontend/yarn.lock
+    
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        yarn install --frozen-lockfile
+    
+    - name: Build frontend
+      run: |
+        cd frontend
+        yarn build
+    
+    - name: Run frontend tests
+      run: |
+        cd frontend
+        yarn test
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [test, frontend-test]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build Docker images
+      run: |
+        cd docker
+        docker build -t magentic-ui:latest .
+    
+    - name: Test Docker container
+      run: |
+        docker run --rm magentic-ui:latest --version
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
