@@ -1,0 +1,122 @@
+# MCP (Model Context Protocol) Server Configuration for Magentic-UI
+# This configuration integrates various MCP servers to extend system capabilities
+
+mcp_servers:
+  # Cartesia Voice Services
+  cartesia:
+    description: "Advanced voice cloning and TTS capabilities"
+    server_params:
+      type: "HttpServerParams"
+      base_url: "https://api.cartesia.ai"
+      api_key_env: "CARTESIA_API_KEY"
+    capabilities:
+      - voice_cloning
+      - text_to_speech
+      - voice_conversion
+      - audio_infill
+    integration_points:
+      - voice_backend
+      - ios_app
+    
+  # HeyGen Avatar Video Generation
+  heygen:
+    description: "AI avatar video generation and management"
+    server_params:
+      type: "HttpServerParams" 
+      base_url: "https://api.heygen.com"
+      api_key_env: "HEYGEN_API_KEY"
+    capabilities:
+      - avatar_video_generation
+      - template_management
+      - webhook_integration
+    integration_points:
+      - magentic_core
+      - frontend
+      
+  # Browser Automation Tools
+  browser_tools:
+    description: "Web automation and browser control"
+    server_params:
+      type: "LocalServerParams"
+      command: "browser-tools-server"
+    capabilities:
+      - web_navigation
+      - form_automation
+      - screenshot_capture
+      - content_extraction
+    integration_points:
+      - magentic_core
+      - web_surfer_agent
+
+# Agent Configurations with MCP Integration
+mcp_agent_configs:
+  - name: voice_enhancement_agent
+    description: "Enhanced voice processing with Cartesia integration"
+    model_client:
+      provider: OpenAIChatCompletionClient
+      config:
+        model: gpt-4o-2024-08-06
+        max_retries: 3
+    system_message: |
+      You are the Voice Enhancement Agent for Magentic-UI. You have access to advanced voice 
+      processing capabilities through Cartesia's MCP server including voice cloning, TTS, 
+      and audio manipulation. Use these tools to enhance user voice interactions.
+    mcp_servers:
+      - server_name: cartesia
+        capabilities: ["voice_cloning", "text_to_speech", "voice_conversion"]
+        
+  - name: video_generation_agent  
+    description: "AI avatar video generation with HeyGen integration"
+    model_client:
+      provider: OpenAIChatCompletionClient
+      config:
+        model: gpt-4o-2024-08-06
+        max_retries: 3
+    system_message: |
+      You are the Video Generation Agent for Magentic-UI. You can create AI avatar videos
+      using HeyGen's platform. Generate professional videos for user requests, manage
+      templates, and handle video generation workflows.
+    mcp_servers:
+      - server_name: heygen
+        capabilities: ["avatar_video_generation", "template_management"]
+        
+  - name: web_automation_agent
+    description: "Enhanced web automation with browser tools"
+    model_client:
+      provider: OpenAIChatCompletionClient
+      config:
+        model: gpt-4o-2024-08-06
+        max_retries: 3
+    system_message: |
+      You are the Web Automation Agent for Magentic-UI. You have advanced browser automation
+      capabilities including navigation, form filling, screenshot capture, and content
+      extraction. Use these tools to perform complex web tasks for users.
+    mcp_servers:
+      - server_name: browser_tools
+        capabilities: ["web_navigation", "form_automation", "screenshot_capture"]
+
+# Integration Webhooks
+webhooks:
+  heygen_completion:
+    url: "https://your-domain.com/webhooks/heygen/completion"
+    events: ["video.completed", "avatar.created"]
+    description: "Receives notifications when HeyGen video generation completes"
+    
+  cartesia_processing:
+    url: "https://your-domain.com/webhooks/cartesia/processing" 
+    events: ["voice.cloned", "tts.completed"]
+    description: "Receives notifications for Cartesia voice processing events"
+
+# Environment Variables Required
+required_env_vars:
+  - CARTESIA_API_KEY
+  - HEYGEN_API_KEY
+  - MCP_SERVER_PORT
+  - WEBHOOK_SECRET_KEY
+
+# MCP Server Startup Configuration
+startup:
+  auto_start: true
+  health_check_interval: 30
+  retry_attempts: 3
+  timeout: 10
