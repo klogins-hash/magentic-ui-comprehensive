@@ -1,0 +1,201 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # Database Services
+  # =============================================================================
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: magentic-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-magentic}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-magentic_ui}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./setup_extensions.sql:/docker-entrypoint-initdb.d/01-extensions.sql
+      - ./setup_vector_tables.sql:/docker-entrypoint-initdb.d/02-vector-tables.sql
+      - ./setup_graph_database.sql:/docker-entrypoint-initdb.d/03-graph-database.sql
+      - ./optimize_database.sql:/docker-entrypoint-initdb.d/04-optimize.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - magentic-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-magentic} -d ${POSTGRES_DB:-magentic_ui}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Valkey (Redis-compatible) Cache
+  valkey:
+    image: valkey/valkey:7.2-alpine
+    container_name: magentic-valkey
+    restart: unless-stopped
+    command: valkey-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - valkey_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - magentic-network
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # =============================================================================
+  # Application Services
+  # =============================================================================
+  magentic-core:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.core
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    container_name: magentic-core
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-magentic}:${POSTGRES_PASSWORD:-secure_password_change_me}@postgres:5432/${POSTGRES_DB:-magentic_ui}
+      - VALKEY_URL=redis://valkey:6379/0
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - MAGENTIC_UI_HOST=0.0.0.0
+      - MAGENTIC_UI_PORT=8081
+      - PYTHONPATH=/app/src
+    ports:
+      - "8081:8081"
+    volumes:
+      - magentic_workdir:/app/workdir
+      - magentic_files:/app/files
+    networks:
+      - magentic-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Voice Backend Service
+  voice-backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.voice
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    container_name: magentic-voice
+    restart: unless-stopped
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - MAGENTIC_UI_URL=http://magentic-core:8081
+      - WEBSOCKET_HOST=0.0.0.0
+      - WEBSOCKET_PORT=8765
+    ports:
+      - "8765:8765"
+    networks:
+      - magentic-network
+    depends_on:
+      magentic-core:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend Service
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    container_name: magentic-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    networks:
+      - magentic-network
+    depends_on:
+      - magentic-core
+      - voice-backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # Monitoring & Observability (Optional)
+  # =============================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: magentic-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - magentic-network
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: magentic-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - "3001:3000"
+    networks:
+      - magentic-network
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+
+# =============================================================================
+# Networks & Volumes
+# =============================================================================
+networks:
+  magentic-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  valkey_data:
+    driver: local
+  magentic_workdir:
+    driver: local
+  magentic_files:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local

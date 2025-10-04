@@ -72,8 +72,34 @@ clean:
 	cd frontend && rm -rf build/ node_modules/.cache/
 	docker system prune -f
 
-# Build Docker containers
-docker:
+# Docker operations
+docker-build:
 	@echo "Building Docker containers..."
-	docker-compose build
-	cd docker && ./build-all.sh
+	docker-compose -f docker-compose.prod.yml build --parallel
+
+docker-deploy:
+	@echo "Deploying production stack..."
+	./deploy.sh deploy
+
+docker-dev:
+	@echo "Starting development environment..."
+	./deploy.sh dev
+
+docker-stop:
+	@echo "Stopping services..."
+	./deploy.sh stop
+
+docker-logs:
+	@echo "Viewing logs..."
+	./deploy.sh logs
+
+docker-health:
+	@echo "Running health checks..."
+	./deploy.sh health
+
+docker-clean:
+	@echo "Cleaning up Docker resources..."
+	./deploy.sh clean
+
+# Legacy docker command
+docker: docker-build

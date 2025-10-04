@@ -1,0 +1,76 @@
+# Multi-stage build for Magentic-UI Core
+FROM python:3.11-slim as builder
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast Python package management
+RUN pip install uv
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
+COPY src/ ./src/
+
+# Install dependencies and build
+RUN uv venv .venv && \
+    . .venv/bin/activate && \
+    uv sync --all-extras && \
+    uv build
+
+# Production stage
+FROM python:3.11-slim as production
+
+# Install system dependencies for runtime
+RUN apt-get update && apt-get install -y \
+    curl \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Playwright browsers
+RUN pip install playwright && \
+    playwright install --with-deps chromium
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash magentic
+
+# Set working directory
+WORKDIR /app
+
+# Copy built application
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/dist /app/dist
+COPY --from=builder /app/src /app/src
+
+# Copy additional files
+COPY docker/ ./docker/
+COPY frontend/build/ ./frontend/build/
+
+# Install the built package
+RUN /app/.venv/bin/pip install /app/dist/*.whl
+
+# Change ownership to non-root user
+RUN chown -R magentic:magentic /app
+
+# Switch to non-root user
+USER magentic
+
+# Expose port
+EXPOSE 8081
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8081/health || exit 1
+
+# Set environment variables
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app/src"
+
+# Default command
+CMD ["magentic-ui", "--port", "8081", "--host", "0.0.0.0"]
