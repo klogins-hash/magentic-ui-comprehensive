@@ -9,22 +9,24 @@ import asyncio
 import json
 import base64
 import tempfile
-from typing import Dict, Any, Optional
 from datetime import datetime
 import logging
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import uvicorn
-from groq import Groq
-import httpx
+
+# Import MCP webhook handler
+from mcp_webhook_handler import mcp_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize Groq client
+from groq import Groq
+from pydantic import BaseModel
+from typing import Optional
+
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 class VoiceMessage(BaseModel):

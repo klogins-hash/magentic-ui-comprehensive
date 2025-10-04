@@ -84,32 +84,38 @@ services:
       retries: 3
       start_period: 60s
 
-  # Voice Backend Service
+  # Voice Backend Service (Pipecat)
   voice-backend:
     build:
-      context: .
-      dockerfile: docker/Dockerfile.voice
+      context: ./voice-backend
+      dockerfile: Dockerfile
       args:
         BUILDKIT_INLINE_CACHE: 1
     container_name: magentic-voice
     restart: unless-stopped
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - MAGENTIC_UI_URL=http://magentic-core:8081
+      - DAILY_API_KEY=${DAILY_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AUTOGEN_BASE_URL=http://magentic-core:8081
       - WEBSOCKET_HOST=0.0.0.0
       - WEBSOCKET_PORT=8765
+      - PIPECAT_LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
     ports:
       - "8765:8765"
+      - "8000:8000"
     networks:
       - magentic-network
     depends_on:
       magentic-core:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
+      test: ["CMD-SHELL", "ps aux | grep -v grep | grep python || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
 
   # Frontend Service
   frontend:
